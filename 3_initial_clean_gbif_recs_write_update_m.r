@@ -1,26 +1,9 @@
 #----------------------------------------------------------------------------------
 # CBP, April 2018. Read GBIF data, omit incorrect/uncertain records, write cleaned data to new file in different directory
+# Mariona Roige, 28/05/2018. Tweaking the script to use it with my data. 
 #----------------------------------------------------------------------------------
 
-library(plyr)
-library(dplyr)
-
-rm(list = ls())
-getwd()
-
-#--------------------------------------------
-# Constants
-#--------------------------------------------
-# Coordinate uncertainty in m. Records with > values will be omitted.
-coord_unc <- 10000
-
-base_dir <- '../DNZ/B_InsectNzProjections'
-
-func_dir <- '../../R_functions'
-
-gbif_read_dir <- paste(base_dir, 'gbif_records', sep ='/')
-
-gbif_write_dir <- paste(base_dir, 'gbif_records_cleaned', sep ='/')
+NoCoordinatesCount = 0
 
 if (!dir.exists(gbif_write_dir)) dir.create(gbif_write_dir)
 
@@ -29,18 +12,12 @@ pp_to_process <- dir(gbif_read_dir, pattern = '.RData')
 n_pp_files <- length(pp_to_process); n_pp_files
 
 #--------------------------------------------
-# Functions
-#--------------------------------------------
-
-source(paste(func_dir, 'fDeleteAllEmptyColumnsInDf.r', sep = '/'))
-source(paste(func_dir, 'fOmitRecordsWithNaInSpecifiedCols.r', sep = '/'))
-source('f_02A_ScreenVarsForVals.r')
-
-#--------------------------------------------
 # In a loop, read & process one GBIF RData file at a time
 #--------------------------------------------
 
+
 for (i in 1: n_pp_files) {
+
 
 	# Get the file name to read
   one_sp_pp <- paste(gbif_read_dir, pp_to_process[i], sep = '/')
@@ -69,37 +46,49 @@ for (i in 1: n_pp_files) {
 	message(paste('Empty columns deleted =', cols1 - ncol(pp)))
 
 	#-------------------------------
-	# Omit records without coordinates
+	# Omit records without coordinates and warn about species without coordinates
 	#-------------------------------
 
-	# Identify longitude column
+	# Identify longitude and latitude columns
 	lon_col <- grep('lon', names(pp), ignore.case = TRUE)
-	if (length(lon_col) > 1) message('Warning: >1 variable chosen for longitude')
-
-	# Identify latitude column
 	lat_col <- grep('lat', names(pp), ignore.case = TRUE)
-	nom_col <- grep('nomenclatural', names(pp), ignore.case = TRUE)
-	lat_col <- lat_col[!lat_col %in% nom_col]
-	if (length(lat_col) > 1) message(paste('Warning: >1 variable chosen for latitude'))
+	
+	if (length(lon_col) == 0 | length(lat_col) == 0) {
+	
+		message(paste(pp_to_process[i],'has no proper coordinate data'))
+	    NoCoordinatesCount = NoCoordinatesCount+1
+	} else { 
+				if (length(lon_col) > 1) {
+				
+				message('Warning: >1 variable chosen for longitude')} 
 
-	# Replace unknown longitude & latitude column names with known names
-	names(pp)[lon_col] <- 'lon'
-	names(pp)[lat_col] <- 'lat'
+				# Identify latitude column
+				lat_col <- grep('lat', names(pp), ignore.case = TRUE)
+				nom_col <- grep('nomenclatural', names(pp), ignore.case = TRUE)
+				lat_col <- lat_col[!lat_col %in% nom_col]
+				if (length(lat_col) > 1) message(paste('Warning: >1 variable chosen for latitude'))
 
-	# Omit records without coordinates
-	rows1 <- nrow(pp)
-	pp <- fOmitRecordsWithNaInSpecifiedCols(pp, c('lon', 'lat'))
-	message(paste('Records without coordinates omitted =', rows1 - nrow(pp)))
-	rm(lon_col, lat_col, nom_col)
+				# Replace unknown longitude & latitude column names with known names
+				names(pp)[lon_col] <- 'lon'
+				names(pp)[lat_col] <- 'lat'
 
-	#-------------------------------
-	# Screen coordinate uncertainty 
-	#-------------------------------
+				# Omit records without coordinates
+				rows1 <- nrow(pp)
+				pp <- fOmitRecordsWithNaInSpecifiedCols(pp, c('lon', 'lat'))
+				message(paste('Records without coordinates omitted =', rows1 - nrow(pp)))
+				rm(lon_col, lat_col, nom_col)
+									}	
+		#-------------------------------
+		# Screen coordinate uncertainty 
+		#-------------------------------
+		# I don't run this part cos later on (next script) there's a test on whether the coordinates fall into 
+		# the right country
+		# rows1 <- nrow(pp)
+		# pp <- fScreenVarsForVals('coordinateUncertaintyInMeters', 'a_silly_old_fart')
+		# message(paste('Records with high xy uncertainty deleted =', rows1 - nrow(pp)))
 
-	rows1 <- nrow(pp)
-	pp <- fScreenVarsForVals('coordinateUncertaintyInMeters', 'a_silly_old_fart')
-	message(paste('Records with high xy uncertainty deleted =', rows1 - nrow(pp)))
-
+	
+	
 	#-------------------------------
 	# Screen 'issues'
 	#-------------------------------
@@ -138,5 +127,7 @@ for (i in 1: n_pp_files) {
 
 } # end for loop
 
-gbif_write_dir
+print(paste('The number of species with no proper coordinates is', NoCoordinatesCount))
+
+
 dir(gbif_write_dir, pattern = '.RData')

@@ -1,74 +1,73 @@
 # 18-May-2018, updated 23_May-2018: Any NZ records are retained in this script. They are excluded in '07_get_nz_projections.r'
-
-rm(list = ls())
-
-library(plyr)
-library(dplyr)
-library(maptools) # loads sp too; for CRS, readShapePoly
-
-#--------------------------------------------
-# Constants
-#--------------------------------------------
-max_m_to_border <- 1500
-
-base_dir <- '../DNZ/B_InsectNzProjections'
-
-func_dir <- '../../R_functions'
-
-gis_dir <- '../r_gis'
-
-crs_geo <- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84')  # geographical, datum WGS84
-
-gbif_read_dir <-  paste(base_dir, 'gbif_records_cleaned', sep = '/')
-
-gbif_write_dir <- paste(base_dir, 'gbif_recs_clean_cntrys_checked', sep = '/')
-
-if (!dir.exists(gbif_write_dir)) dir.create(gbif_write_dir)
-
-sf_read_dir <- '../sfs/general/rdata' 
-
-sf_read_fn <- 'world_countries_wgs84.RData' # wld
-
-#--------------------------------------------
-# Functions
-#--------------------------------------------
-
-source(paste(func_dir, 'fDeleteAllEmptyColumnsInDf.r', sep = '/'))
-source(paste(func_dir, 'fPlotBaseMapOfPts.r', sep = '/'))
-
-source('f_03A_JoinGbifPpsToWldSfCtryData.r')
-source('f_03B_SelectGbifColsWithCtryDat.r')
-source('f_03C_IdRecsWithCtryDatThatDifferBetweenGbifAndWldSf.r')
-source('f_03D_fAcceptSomeCountryDiscrepanciesBetweenShapeAndGbif.r')
-source('f_03E_GetDistBetweenSuspectPpAndGbifCountryBorder.r')
+# The line below is written by C.P, don't know what it refers to. Mariona, 30/05/18
 
 #---------------------------------------------------------
 # Read world SF & get vector of GBIF files to process.
 #---------------------------------------------------------
 
 # Read world countries RData SF
-load(paste(sf_read_dir, sf_read_fn, sep = '/')) 
 
-pp_to_process <- dir(gbif_read_dir, pattern = ".RData") 
+load('world_countries_wgs84.RData')
 
+pp_to_process <- dir(gbif_read_cleaned_dir, pattern = ".RData") 
 n_pp_files <- length(pp_to_process); n_pp_files
 
 #---------------------------------------------------------
 # Start file-by-file processing
 #---------------------------------------------------------
-#i<-3
-for (i in 1: n_pp_files) {
+i<-323
 
-	keep_me <- ls()[grep('f_03*', ls())]
-	keep_me <- c(keep_me, 'max_m_to_border', 'can', 'crs_geo', 'fDeleteAllEmptyColumnsInDf', 'fPlotBaseMapOfPts', 'func_dir', 'gbif_read_dir', 'gbif_write_dir', 'i', 'n_pp_files', 'pp_to_process', 'wld')
-	rm(list = ls()[!ls() %in% keep_me])
+for (i in 322: n_pp_files) {
 
+	# Get the file name to read
+  one_sp_pp <- paste(gbif_read_cleaned_dir, pp_to_process[i], sep = '/')
+
+	# Read the file
+	if (file.exists(one_sp_pp)) {
+			load(one_sp_pp)
+		} else {
+			message(paste0("\nNo file '", one_sp_pp, "' on disc"))
+	}
+
+	#-------------------------------
+	# Rename pps to pp & delete pps
+	#-------------------------------
+
+	if (exists('pps')) pp <- pps
+	if (exists('pps')) rm(pps)
+	message(paste('Records in', one_sp_pp, '=', nrow(pp)))
+
+#if (i>1) {
+	#keep_me <- ls()[grep('f_03*', ls())]
+	#keep_me <- c(keep_me, 'max_m_to_border', 'can', 'crs_geo', 'fDeleteAllEmptyColumnsInDf', 'fPlotBaseMapOfPts', 'func_dir', 'gbif_read_dir', 'gbif_write_dir', 'i', 'n_pp_files', 'pp_to_process', 'wld')
+	#rm(list = ls()[!ls() %in% keep_me])
+	#rm(list = ls()[!ls() %in% keep_me])
+	
+
+# Identify longitude and latitude columns
+	#one_sp_pp <- paste0(gbif_read_dir, "/", pp_to_process[i])
+	
+	#if (file.exists(one_sp_pp) {
+   #   load(one_sp_pp)
+  #  } else {
+ #     message(paste0("\nNo file '", one_sp_pp, "' on disc"))
+#  }
+	lon_col <- grep('lon', names(pp), ignore.case = TRUE)
+	lat_col <- grep('lat', names(pp), ignore.case = TRUE)
+	
+	if (length(lon_col) == 0 | length(lat_col) == 0) {
+	
+		message(paste(pp_to_process[i],'has no proper coordinate data'))
+	    NoCoordinatesCount = NoCoordinatesCount+1
+	} else { 
+		#}
+		
 	#---------------------------------------------------------
 	# Read one GBIF file & rename it
 	#---------------------------------------------------------
-	one_sp_pp <- paste0(gbif_read_dir, "/", pp_to_process[i])
+	
 
-	load(one_sp_pp)
+	#load(one_sp_pp)
 
 	# Rename pps/pp to gbif & delete pps
 	if (exists('pp')) {
@@ -122,7 +121,7 @@ for (i in 1: n_pp_files) {
 
 		# Don't use 'dplyr::filter', which drops meters == NA
 		gb_to_chk <- gb_to_chk[gb_to_chk$meters > max_m_to_border, ]
-	} # end if 
+		} # end if 
 
 	#---------------------------------------------------------
 	# Delete suspect records from GBIF
@@ -143,6 +142,7 @@ for (i in 1: n_pp_files) {
 
 		# Delete the suspect records from the main data
 		nrow(gbif)
+		gb_to_chk <- gb_to_chk[-c(which(is.na(gb_to_chk$meters))),] # Check & delete the NA we introduced in f_03E_GetDistBetweenSuspectPpAndGbifCountryBorder to avoid error in next line
 		gbif <- gbif[-as.integer(gb_to_chk$chk), ]
     nrow(gbif)
 
@@ -151,12 +151,13 @@ for (i in 1: n_pp_files) {
 	#---------------------------------------------------------
 	# Write cleaned records to RData
 	#---------------------------------------------------------
-	save(gbif, file = paste0(gbif_write_dir, '/', pp_to_process[i]))
+	save(gbif, file = paste0(gbif_write_country_cleaned_dir, '/', pp_to_process[i]))
 
 	message(paste0(i, ' of ', n_pp_files, ': ', paste(gbif_write_dir, pp_to_process[i], sep = '/')))
 
 	flush.console()
-
+}
 } # end for loop
 
-dir(gbif_write_dir, pattern = '.RData')
+#dir(gbif_write_dir, pattern = '.RData')
+ 

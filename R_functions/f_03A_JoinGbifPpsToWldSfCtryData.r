@@ -20,6 +20,8 @@ f_03A_JoinGbifPpsToWldSfCtryData <- function(gb_raw_dat) {
 # Convert presence points from GBIF into spatial object
 #---------------------------------------------------------
 	pts <- gbif[ , c(lon_col, lat_col)]
+	pts <- Filter(is.numeric, pts) # Fix for the problem when there's more than one column of lon or lat and one of them is not numeric. if it is, for example, NA
+									         # the code was crashing because the function SpatialPoints doesn't accept NAs.  
 	pts <- SpatialPoints(pts, proj4string = crs_geo)
 	#str(pts)
 
@@ -33,6 +35,10 @@ f_03A_JoinGbifPpsToWldSfCtryData <- function(gb_raw_dat) {
 #---------------------------------------------------------
 # Join GBIF presence point locations with the world countries they occur in, as indicated by the world shapefile
 #---------------------------------------------------------
+	#wld2 <- SpatialPoints(wld, proj4string = crs_geo)  
+	
+	proj4string(pts) <- crs_geo					# Mariona, 1/06/18. If I didn't put this in, it wouldn't let me run 'over()'
+	proj4string(wld) <- crs_geo 				# Mariona, 1/06/18. If I didn't put this in, it wouldn't let me run 'over()
 	pts_ctry <- over(pts, wld)
 
 #---------------------------------------------------------
